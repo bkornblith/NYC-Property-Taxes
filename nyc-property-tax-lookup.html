@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NYC Property Tax Lookup</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@400;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #0f0f0f;
+    --paper: #f5f0e8;
+    --aged: #e8e0cc;
+    --accent: #c8380a;
+    --accent-light: #e85a2a;
+    --muted: #7a6f5e;
+    --border: #c4b99a;
+    --success: #2a6e3a;
+    --card: #faf7f0;
+    --shadow: rgba(15,15,15,0.12);
+  }
+
+  html { font-size: 16px; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(180,165,130,0.15) 27px, rgba(180,165,130,0.15) 28px);
+    background-size: 100% 28px;
+  }
+
+  .header {
+    border-bottom: 2px solid var(--ink);
+    padding: 2rem 2.5rem 1.5rem;
+    background: var(--paper);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: blur(4px);
+  }
+
+  .header-top {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.9rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+
+  .header-badge {
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1.5px solid var(--accent);
+    padding: 0.15rem 0.5rem;
+    border-radius: 2px;
+  }
+
+  .header p {
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 0.03em;
+  }
+
+  .main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 2.5rem 2rem;
+  }
+
+  /* Search form */
+  .search-card {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    padding: 1.75rem;
+    margin-bottom: 2rem;
+    box-shadow: 3px 3px 0 var(--border);
+  }
+
+  .search-card h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    font-weight: 400;
+    color: var(--muted);
+    margin-bottom: 1.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.7rem;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 2fr 1fr;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  label {
+    font-size: 0.65rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+
+  input, select {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--paper);
+    border: 1.5px solid var(--border);
+    border-radius: 3px;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+
+  input:focus, select:focus {
+    border-color: var(--ink);
+  }
+
+  .btn-search {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    padding: 0.7rem 1.5rem;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 0.75rem;
+    transition: background 0.15s, transform 0.1s;
+    text-transform: uppercase;
+  }
+
+  .btn-search:hover { background: var(--accent); }
+  .btn-search:active { transform: scale(0.99); }
+  .btn-search:disabled { background: var(--border); cursor: not-allowed; }
+
+  /* Status */
+  .status {
+    font-size: 0.75rem;
+    margin-top: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: 3px;
+    display: none;
+  }
+  .status.loading { display: block; background: var(--aged); color: var(--muted); border: 1px solid var(--border); }
+  .status.error { display: block; background: #fdf0ec; color: var(--accent); border: 1px solid #e8b8a8; }
+
+  /* Results */
+  .results { display: none; }
+  .results.visible { display: block; }
+
+  .result-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1.5px solid var(--border);
+  }
+
+  .result-address {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--ink);
+  }
+
+  .result-meta {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 0.3rem;
+    letter-spacing: 0.04em;
+  }
+
+  .result-bbl {
+    font-size: 0.65rem;
+    color: var(--muted);
+    background: var(--aged);
+    padding: 0.3rem 0.6rem;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+
+  /* Data grid */
+  .data-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .data-card {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    padding: 1.25rem;
+    box-shadow: 2px 2px 0 var(--border);
+  }
+
+  .data-card.highlight {
+    border-color: var(--ink);
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+
+  .data-card-label {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-bottom: 0.4rem;
+  }
+
+  .data-card-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1;
+  }
+
+  .data-card.highlight .data-card-value {
+    color: var(--accent);
+  }
+
+  .data-card-sub {
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-top: 0.35rem;
+  }
+
+  /* Details table */
+  .details-section {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 2px 2px 0 var(--border);
+    margin-bottom: 1.5rem;
+  }
+
+  .details-section h3 {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--paper);
+    background: var(--ink);
+    padding: 0.6rem 1rem;
+  }
+
+  .details-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .details-table tr:nth-child(even) td {
+    background: var(--aged);
+  }
+
+  .details-table td {
+    padding: 0.55rem 1rem;
+    font-size: 0.78rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .details-table td:first-child {
+    color: var(--muted);
+    width: 55%;
+    font-size: 0.72rem;
+  }
+
+  .details-table td:last-child {
+    font-weight: 500;
+    text-align: right;
+    color: var(--ink);
+  }
+
+  .details-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* Billing history */
+  .bills-list {
+    list-style: none;
+  }
+
+  .bill-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .bill-item:hover { background: var(--aged); }
+  .bill-item:last-child { border-bottom: none; }
+
+  .bill-item-date { color: var(--muted); font-size: 0.7rem; }
+  .bill-item-amount { font-weight: 500; }
+  .bill-item-link {
+    font-size: 0.65rem;
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--accent);
+    padding: 0.1rem 0.4rem;
+    border-radius: 2px;
+    transition: all 0.1s;
+  }
+  .bill-item-link:hover { background: var(--accent); color: white; }
+
+  /* Source note */
+  .source-note {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-align: center;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    letter-spacing: 0.03em;
+  }
+
+  .source-note a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  /* How it works */
+  .how-it-works {
+    background: var(--aged);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1.25rem;
+    margin-bottom: 2rem;
+  }
+
+  .how-it-works h3 {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+  }
+
+  .how-it-works ol {
+    list-style: decimal;
+    padding-left: 1.25rem;
+    font-size: 0.75rem;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+
+  .how-it-works ol li span {
+    color: var(--ink);
+  }
+
+  @media (max-width: 600px) {
+    .form-row { grid-template-columns: 1fr; }
+    .data-grid { grid-template-columns: 1fr; }
+    .header { padding: 1.25rem; }
+    .main { padding: 1.5rem 1rem; }
+    .result-header { flex-direction: column; gap: 0.5rem; }
+  }
+
+  .field-hint {
+    font-size: 0.6rem;
+    color: var(--muted);
+    margin-top: 0.2rem;
+    font-style: italic;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border: 1.5px solid var(--border);
+    border-top-color: var(--ink);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .tag {
+    display: inline-block;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.15rem 0.45rem;
+    border-radius: 2px;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+  }
+  .tag-class1 { background: #e8f4eb; color: #2a6e3a; border: 1px solid #9cccab; }
+  .tag-class2 { background: #ebf0fb; color: #2a4aae; border: 1px solid #9cb5e8; }
+  .tag-class4 { background: #fdf0ec; color: var(--accent); border: 1px solid #e8b8a8; }
+
+  .no-results {
+    text-align: center;
+    padding: 3rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+
+  .abatement-row td:first-child { color: var(--success); }
+
+  /* Collapsible sections */
+  .collapsible-section { }
+  .collapsible-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+    padding: 0.6rem 1rem;
+    background: var(--ink);
+    color: var(--paper);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    border: none;
+    width: 100%;
+    text-align: left;
+  }
+  .collapsible-toggle:hover { background: #2a2a2a; }
+  .collapsible-arrow {
+    font-size: 0.7rem;
+    transition: transform 0.2s;
+    display: inline-block;
+  }
+  .collapsible-toggle.open .collapsible-arrow { transform: rotate(180deg); }
+  .collapsible-body { display: none; }
+  .collapsible-body.open { display: block; }
+
+  /* Payment history table */
+  .payment-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.72rem;
+  }
+  .payment-table thead tr {
+    background: var(--aged);
+    border-bottom: 1.5px solid var(--border);
+  }
+  .payment-table thead th {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-size: 0.62rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .payment-table thead th:not(:first-child) { text-align: right; }
+  .payment-table tbody tr { border-bottom: 1px solid var(--border); }
+  .payment-table tbody tr:hover { background: var(--aged); }
+  .payment-table tbody td {
+    padding: 0.5rem 0.75rem;
+    color: var(--ink);
+  }
+  .payment-table tbody td:not(:first-child) { text-align: right; }
+  .payment-table tbody td.credit { color: var(--success); }
+  .payment-table tbody td.debit { color: var(--accent); }
+  .payment-table tfoot tr {
+    background: var(--aged);
+    border-top: 1.5px solid var(--border);
+    font-weight: 600;
+  }
+  .payment-table tfoot td {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.72rem;
+  }
+  .payment-table tfoot td:not(:first-child) { text-align: right; }
+
+  /* PDF document list */
+  .doc-list { list-style: none; }
+  .doc-item {
+    display: grid;
+    grid-template-columns: 90px 1fr auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.75rem;
+  }
+  .doc-item:last-child { border-bottom: none; }
+  .doc-item:hover { background: var(--aged); }
+  .doc-date { color: var(--muted); font-size: 0.68rem; white-space: nowrap; }
+  .doc-type { color: var(--ink); }
+  .doc-fy { color: var(--muted); font-size: 0.65rem; }
+
+  /* Lazy loading */
+  .lazy-placeholder {
+    padding: 1.25rem 1rem;
+    font-size: 0.72rem;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-top: 1px solid var(--border);
+  }
+
+  /* DOF iframe payment embed */
+  .dof-iframe-wrap { position: relative; background: var(--card); }
+  .dof-iframe-overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 0.6rem; font-size: 0.72rem; color: var(--muted);
+    background: var(--card); pointer-events: none;
+    transition: opacity 0.4s;
+  }
+  .dof-iframe-overlay.hidden { opacity: 0; pointer-events: none; }
+  .dof-iframe {
+    width: 100%; border: none; display: block;
+    min-height: 540px; background: white; opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .dof-iframe.loaded { opacity: 1; }
+  .dof-iframe-footer {
+    font-size: 0.62rem; color: var(--muted);
+    padding: 0.4rem 1rem; border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <h1>NYC Property Tax Lookup</h1>
+    <span class="header-badge">Live DOF Data</span>
+  </div>
+  <p>Queries the NYC Department of Finance directly from your browser — no proxy, no restrictions.</p>
+</div>
+
+<div class="main">
+
+  <div class="how-it-works">
+    <h3>How this works</h3>
+    <ol>
+      <li><span>Geocodes your address</span> via the NYC Planning GeoSearch API to get the Borough-Block-Lot (BBL)</li>
+      <li><span>Queries the NYC DOF Property Tax portal</span> using your BBL to retrieve live assessment data</li>
+      <li><span>Fetches your tax bills</span> directly from the DOF document system (EDMS) for exact annual amounts</li>
+    </ol>
+  </div>
+
+  <div class="search-card">
+    <h2>Search a Property</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>House #</label>
+        <input type="text" id="houseNum" placeholder="277" value="277">
+      </div>
+      <div class="form-group">
+        <label>Street Name</label>
+        <input type="text" id="street" placeholder="Water Street" value="Water Street">
+        <span class="field-hint">e.g. "Water" or "Water Street" — both work</span>
+      </div>
+      <div class="form-group">
+        <label>Borough</label>
+        <select id="borough">
+          <option value="Manhattan" selected>Manhattan</option>
+          <option value="Brooklyn">Brooklyn</option>
+          <option value="Queens">Queens</option>
+          <option value="Bronx">Bronx</option>
+          <option value="Staten Island">Staten Island</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn-search" id="searchBtn" onclick="lookupProperty()">
+      Search Property Tax Records
+    </button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="results" id="results"></div>
+
+</div>
+
+<script>
+const BOROUGH_CODES = {
+  'Manhattan': 1, 'Bronx': 2, 'Brooklyn': 3, 'Queens': 4, 'Staten Island': 5
+};
+
+function setStatus(msg, type = 'loading') {
+  const el = document.getElementById('status');
+  el.className = `status ${type}`;
+  el.innerHTML = type === 'loading'
+    ? `<span class="spinner"></span>${msg}`
+    : msg;
+}
+
+function clearStatus() {
+  document.getElementById('status').className = 'status';
+}
+
+function fmt(n) {
+  if (!n && n !== 0) return '—';
+  return '$' + Number(n).toLocaleString('en-US');
+}
+
+function fmtNum(n) {
+  if (!n && n !== 0) return '—';
+  return Number(n).toLocaleString('en-US');
+}
+
+function getTaxClassName(code) {
+  const map = { '1': 'Class 1', '1A': 'Class 1A', '1B': 'Class 1B', '1C': 'Class 1C',
+    '2': 'Class 2', '2A': 'Class 2A', '2B': 'Class 2B', '2C': 'Class 2C',
+    '4': 'Class 4' };
+  return map[code] || `Class ${code}`;
+}
+
+function getTaxClassTag(code) {
+  if (!code) return '';
+  if (code.startsWith('1')) return `<span class="tag tag-class1">${getTaxClassName(code)}</span>`;
+  if (code.startsWith('2')) return `<span class="tag tag-class2">${getTaxClassName(code)}</span>`;
+  return `<span class="tag tag-class4">${getTaxClassName(code)}</span>`;
+}
+
+// Borough bounding boxes for geographic filtering (geosearch fallback)
+const BOROUGH_BOUNDS = {
+  'Manhattan':    { min_lon: -74.0479, max_lon: -73.9067, min_lat: 40.6829, max_lat: 40.8820 },
+  'Brooklyn':     { min_lon: -74.0421, max_lon: -73.8334, min_lat: 40.5707, max_lat: 40.7395 },
+  'Queens':       { min_lon: -73.9630, max_lon: -73.7004, min_lat: 40.5431, max_lat: 40.8007 },
+  'Bronx':        { min_lon: -73.9338, max_lon: -73.7654, min_lat: 40.7855, max_lat: 40.9176 },
+  'Staten Island':{ min_lon: -74.2591, max_lon: -74.0341, min_lat: 40.4774, max_lat: 40.6501 },
+};
+
+const BOROUGH_CODE = { manhattan:'1', bronx:'2', brooklyn:'3', queens:'4', statenisland:'5' };
+function normBorough(b) { return b.toLowerCase().replace(/\s+/g,''); }
+
+// Debug log — appended to the status area for transparency
+const debugLines = [];
+function dbg(msg) {
+  debugLines.push(msg);
+  console.log('[NYC Tax]', msg);
+}
+
+async function geocodeAddress(houseNum, street, borough) {
+  const bCode  = BOROUGH_CODE[normBorough(borough)];
+  const bounds = BOROUGH_BOUNDS[borough];
+
+  // ── Strategy 1: NYC Planning GeoSearch ──────────────────────────────────
+  // Returns GeoJSON. The BBL field varies by response — dump all properties to find it.
+  const queryVariants = [
+    `${houseNum} ${street} ${borough}`,
+    `${houseNum} ${street}`,
+  ];
+  for (const q of queryVariants) {
+    dbg(`GeoSearch: "${q}"`);
+    try {
+      const params = new URLSearchParams({
+        text: q, size: '10',
+        'boundary.rect.min_lon': bounds.min_lon,
+        'boundary.rect.max_lon': bounds.max_lon,
+        'boundary.rect.min_lat': bounds.min_lat,
+        'boundary.rect.max_lat': bounds.max_lat,
+      });
+      const r = await fetch(`https://geosearch.planninglabs.nyc/v2/search?${params}`);
+      dbg(`  HTTP ${r.status}`);
+      if (!r.ok) continue;
+      const d = await r.json();
+      const features = d.features || [];
+      dbg(`  features: ${features.length}`);
+      if (features.length > 0) {
+        // Dump ALL property keys from first result so we can see the real BBL field name
+        const allKeys = Object.keys(features[0].properties || {});
+        dbg(`  property keys: ${allKeys.join(', ')}`);
+        dbg(`  first result props: ${JSON.stringify(features[0].properties).substring(0, 400)}`);
+      }
+      for (const f of features) {
+        const p = f.properties || {};
+        // Try every possible BBL field name
+        const bblRaw = p.pad_bbl || p.bbl || p.addendum?.pad?.bbl || p['pad:bbl'];
+        const bbl = bblRaw ? String(bblRaw).padStart(10, '0') : null;
+        dbg(`  label=${p.label} bbl_raw=${bblRaw} bbl=${bbl}`);
+        if (bbl && bbl !== '0000000000' && bbl[0] === bCode) {
+          return { bbl, props: p };
+        }
+      }
+      // Accept any valid BBL
+      for (const f of features) {
+        const p = f.properties || {};
+        const bblRaw = p.pad_bbl || p.bbl || p.addendum?.pad?.bbl;
+        if (bblRaw) {
+          const bbl = String(bblRaw).padStart(10, '0');
+          if (bbl !== '0000000000') return { bbl, props: p };
+        }
+      }
+    } catch(e) { dbg(`  error: ${e.message}`); }
+  }
+
+  // ── Strategy 2: GeoSearch autocomplete ──────────────────────────────────
+  dbg(`GeoSearch autocomplete`);
+  try {
+    const params = new URLSearchParams({
+      text: `${houseNum} ${street} ${borough}`,
+      'boundary.rect.min_lon': bounds.min_lon,
+      'boundary.rect.max_lon': bounds.max_lon,
+      'boundary.rect.min_lat': bounds.min_lat,
+      'boundary.rect.max_lat': bounds.max_lat,
+    });
+    const r = await fetch(`https://geosearch.planninglabs.nyc/v2/autocomplete?${params}`);
+    dbg(`  HTTP ${r.status}`);
+    if (r.ok) {
+      const d = await r.json();
+      const features = d.features || [];
+      dbg(`  features: ${features.length}`);
+      if (features.length > 0) {
+        dbg(`  first props: ${JSON.stringify(features[0].properties).substring(0, 400)}`);
+      }
+      for (const f of features) {
+        const p = f.properties || {};
+        const bblRaw = p.pad_bbl || p.bbl || p.addendum?.pad?.bbl;
+        if (bblRaw) {
+          const bbl = String(bblRaw).padStart(10, '0');
+          if (bbl !== '0000000000') return { bbl, props: p };
+        }
+      }
+    }
+  } catch(e) { dbg(`  error: ${e.message}`); }
+
+  // ── Strategy 3: NYC Open Data PLUTO — search by address directly ─────────
+  // PLUTO has address + borocode fields we can query without needing a BBL first
+  dbg(`PLUTO address search`);
+  try {
+    // Normalize street name: remove "Street", "St", etc for PLUTO address format
+    const streetNorm = street.toUpperCase()
+      .replace(/\bSTREET\b/g, 'ST').replace(/\bAVENUE\b/g, 'AVE')
+      .replace(/\bBOULEVARD\b/g, 'BLVD').replace(/\bPLACE\b/g, 'PL')
+      .replace(/\bROAD\b/g, 'RD').replace(/\bDRIVE\b/g, 'DR')
+      .trim();
+    const boroCode = BOROUGH_CODE[normBorough(borough)];
+    const addr = `${houseNum} ${streetNorm}`;
+    const plutoAddrUrl = `https://data.cityofnewyork.us/resource/64uk-42ks.json?address=${encodeURIComponent(addr)}&borocode=${boroCode}&$limit=5`;
+    dbg(`  PLUTO addr query: ${addr}, boro=${boroCode}`);
+    const r = await fetch(plutoAddrUrl);
+    dbg(`  HTTP ${r.status}`);
+    if (r.ok) {
+      const rows = await r.json();
+      dbg(`  rows: ${rows.length}`);
+      if (rows.length > 0) {
+        dbg(`  first row keys: ${Object.keys(rows[0]).join(', ')}`);
+        dbg(`  first row: ${JSON.stringify(rows[0]).substring(0, 300)}`);
+        const row = rows[0];
+        const bbl = String(row.bbl || '').padStart(10, '0');
+        if (bbl && bbl !== '0000000000') {
+          return { bbl, props: { label: `${row.address}, ${borough}`, ...row }, plutoData: row };
+        }
+      }
+    }
+  } catch(e) { dbg(`  error: ${e.message}`); }
+
+  dbg('All strategies exhausted');
+  return null;
+}
+
+// Parse a QBL/SBL bill PDF text to extract key financial data for one quarter
+function parseBillText(text) {
+  if (!text || text.length < 50) return null;
+
+  const get = (patterns) => {
+    for (const p of patterns) {
+      const m = text.match(p);
+      if (m) return m[1]?.trim();
+    }
+    return null;
+  };
+
+  const activityDate = get([/[Aa]ctivity\s+through\s+([A-Za-z]+ \d+,?\s+\d{4})/, /[Ss]tatement\s+[Dd]ate[:\s]+([A-Za-z]+ \d+,?\s+\d{4})/]);
+  const outstanding  = get([/Outstanding\s+[Cc]harges\s+\$?([\d,.-]+)/, /[Pp]revious\s+[Bb]alance\s+\$?([\d,.-]+)/]);
+  const newCharges   = get([/New\s+[Cc]harges\s+\$?([\d,.-]+)/, /[Cc]urrent\s+[Cc]harges\s+\$?([\d,.-]+)/]);
+  const amountDue    = get([/Amount\s+Due\s+\$?([\d,.-]+)/, /[Tt]otal\s+[Aa]mount\s+[Dd]ue\s+\$?([\d,.-]+)/]);
+  const annualTax    = get([/[Aa]nnual\s+property\s+tax\s+\$?([\d,.-]+)/]);
+  const payBy        = get([/[Pp]lease\s+pay\s+by\s+([A-Za-z]+ \d+,?\s+\d{4})/,  /[Pp]ay\s+by\s+([A-Za-z]+ \d+,?\s+\d{4})/]);
+  const taxYear      = get([/[Jj]uly\s+1,?\s+(\d{4})\s+[Tt]hrough\s+[Jj]une\s+30,?\s+\d{4}/]);
+  const marketValue  = get([/[Ee]stimated\s+[Mm]arket\s+[Vv]alue\s+\$?([\d,]+)/]);
+  const assessed     = get([/[Bb]illable\s+[Aa]ssessed\s+[Vv]alue\s+\$?([\d,]+)/]);
+  const taxRate      = get([/[Tt]ax\s+[Rr]ate\s+([\d.]+%)/]);
+
+  // Parse "Previous Charges Amount" section — shows what was owed / paid last period
+  const prevSection = text.match(/[Pp]revious\s+[Cc]harges\s+[Aa]mount([\s\S]{0,500}?)[Cc]urrent\s+[Cc]harges/);
+  const prevCharges = [];
+  if (prevSection) {
+    const lines = prevSection[1].split('\n').map(l => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      const m = line.match(/^(.+?)\s+(-?\$?[\d,]+\.\d{2})\s*$/);
+      if (m) prevCharges.push({ desc: m[1].trim(), amount: m[2] });
+    }
+  }
+
+  return { activityDate, outstanding, newCharges, amountDue, annualTax, payBy, taxYear, marketValue, assessed, taxRate, prevCharges };
+}
+
+// Background loader: fetches individual bill PDFs and populates the payment history table
+async function loadPaymentHistoryInBackground(bbl, billList, annualBills, edms) {
+  const target = document.getElementById('pay-hist-body');
+  if (!target) return;
+
+  // Combine and sort all bills, most recent first
+  const allBills = [
+    ...(Array.isArray(billList) ? billList : []),
+    ...(Array.isArray(annualBills) ? annualBills : []),
+  ].sort((a, b) => (b.docDate || b.stmtDate || 0) - (a.docDate || a.stmtDate || 0));
+
+  if (allBills.length === 0) {
+    // No bills in EDMS — try fetching recent known QBL dates
+    const knownDates = [];
+    const now = new Date();
+    // Generate the last 12 quarterly billing dates
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now);
+      d.setMonth(d.getMonth() - i * 3);
+      const yr = d.getFullYear();
+      const mo = d.getMonth() + 1;
+      // NYC billing dates: Jul 1, Oct 1, Jan 1, Apr 1 (issued ~15th of prior month)
+      const billingDates = [`${yr}0615`, `${yr}0915`, `${yr}1215`, `${yr-1}0315`];
+      knownDates.push(...billingDates.map(d2 => ({ docURL: `${edms}?bbl=${bbl}&stmtDate=${d2}&stmtType=QBL`, stmtDate: d2 })));
+    }
+    allBills.push(...knownDates);
+  }
+
+  const rows = [];
+  let fetched = 0;
+  const MAX_FETCH = 12; // Fetch up to 12 bills for ~3 years of history
+
+  for (const doc of allBills.slice(0, MAX_FETCH)) {
+    const rawDate = (doc.docDate || doc.stmtDate || '').toString();
+    const dateStr = rawDate.replace(/-/g, '').slice(0, 8);
+    const url = doc.docURL || `${edms}?bbl=${bbl}&stmtDate=${dateStr}&stmtType=QBL`;
+
+    try {
+      const r = await fetch(url);
+      if (!r.ok) continue;
+      const text = await r.text();
+      if (text.length < 100) continue;
+
+      const parsed = parseBillText(text);
+      if (!parsed) continue;
+
+      fetched++;
+      const fy = parsed.taxYear ? `FY${parseInt(parsed.taxYear) + 1}` : '';
+      rows.push({ date: parsed.activityDate || dateStr, payBy: parsed.payBy || '', outstanding: parsed.outstanding, newCharges: parsed.newCharges, amountDue: parsed.amountDue, annualTax: parsed.annualTax, fy, url });
+
+      // Update the table incrementally as we get data
+      renderPaymentRows(target, rows);
+    } catch(e) {}
+  }
+
+  if (fetched === 0) {
+    target.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:1rem;color:var(--muted);font-size:0.72rem">
+      No bill data available from EDMS for this property.
+      <a href="https://a836-pts-access.nyc.gov/care/search/commonsearch.aspx?mode=persprop" target="_blank" style="color:var(--accent);margin-left:0.25rem">View on DOF portal →</a>
+    </td></tr>`;
+  }
+}
+
+function renderPaymentRows(tbody, rows) {
+  const fmt = n => n ? (n.toString().startsWith('-') || n.toString().startsWith('$-') ? `<span style="color:var(--success)">${n}</span>` : n) : '—';
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td style="white-space:nowrap;font-size:0.7rem">${r.date || '—'}</td>
+    <td style="font-size:0.7rem;color:var(--muted)">${r.fy || '—'}</td>
+    <td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(r.outstanding ? '$'+r.outstanding : null)}</td>
+    <td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(r.newCharges ? '$'+r.newCharges : null)}</td>
+    <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600">${fmt(r.amountDue ? '$'+r.amountDue : null)}</td>
+  </tr>`).join('');
+}
+
+async function lookupProperty() {
+  const houseNum = document.getElementById('houseNum').value.trim();
+  const street   = document.getElementById('street').value.trim();
+  const borough  = document.getElementById('borough').value;
+
+  if (!houseNum || !street) {
+    setStatus('Please enter a house number and street name.', 'error');
+    return;
+  }
+
+  debugLines.length = 0; // clear debug log
+  document.getElementById('searchBtn').disabled = true;
+  document.getElementById('results').className = 'results';
+  setStatus('Step 1/3 — Geocoding address…');
+
+  try {
+    // ── Step 1: Geocode ──
+    const geocodeResult = await geocodeAddress(houseNum, street, borough);
+
+    if (!geocodeResult) {
+      const debugDump = debugLines.join('\n');
+      throw new Error(
+        `Address not found after trying 3 geocoding methods.\n\nDebug log:\n${debugDump}\n\nTips: check spelling, try "Water St" instead of "Water Street", or verify the borough.`
+      );
+    }
+
+    const { bbl: padBBL, props, plutoData: earlyPluto } = geocodeResult;
+    const block = parseInt(padBBL.slice(1, 6));
+    const lot   = parseInt(padBBL.slice(6, 10));
+    const boroughCode = padBBL[0];
+
+    dbg(`Geocoding succeeded: BBL=${padBBL}`);
+    setStatus(`Step 2/3 — BBL ${padBBL} (Block ${block}, Lot ${lot}) — fetching assessment data…`);
+
+    // ── Step 2: PLUTO ──
+    let plutoData = earlyPluto || null;
+    if (!plutoData) {
+      const bblInt = parseInt(padBBL, 10).toString();
+      const plutoUrls = [
+        `https://data.cityofnewyork.us/resource/64uk-42ks.json?bbl=${padBBL}&$limit=1`,
+        `https://data.cityofnewyork.us/resource/64uk-42ks.json?bbl=${bblInt}&$limit=1`,
+      ];
+      for (const u of plutoUrls) {
+        try {
+          dbg(`PLUTO: ${u}`);
+          const r = await fetch(u);
+          dbg(`  PLUTO HTTP ${r.status}`);
+          if (r.ok) {
+            const arr = await r.json();
+            dbg(`  PLUTO rows: ${arr.length}`);
+            if (arr.length > 0) { plutoData = arr[0]; break; }
+          }
+        } catch(e) { dbg(`  PLUTO error: ${e.message}`); }
+      }
+    }
+
+    // ── Step 3: DOF EDMS — all document lists in parallel ────────────────────
+    setStatus(`Step 3/3 — Fetching documents from NYC DOF…`);
+    let stmtList = [], billList = [], annualBills = [];
+    const edms = `https://a836-edms.nyc.gov/dctm-rest/repositories/dofedmspts/StatementSearch`;
+    await Promise.allSettled([
+      fetch(`${edms}?bbl=${padBBL}&stmtType=NPV`).then(r => r.ok ? r.json() : []).then(d => { if (Array.isArray(d)) stmtList = d; }).catch(()=>{}),
+      fetch(`${edms}?bbl=${padBBL}&stmtType=QBL`).then(r => r.ok ? r.json() : []).then(d => { if (Array.isArray(d)) billList = d; }).catch(()=>{}),
+      fetch(`${edms}?bbl=${padBBL}&stmtType=SBL`).then(r => r.ok ? r.json() : []).then(d => { if (Array.isArray(d)) annualBills = d; }).catch(()=>{}),
+    ]);
+    dbg(`EDMS: NOPVs=${stmtList.length} QBills=${billList.length} SBills=${annualBills.length}`);
+
+    // Render immediately with what we have — payment history loads in background
+    clearStatus();
+    renderResults({ address: `${houseNum} ${street}`, borough, bbl: padBBL, block, lot, boroughCode,
+      geocodeLabel: props.label || '', plutoData, stmtList, billList, annualBills });
+
+    // ── Background: fetch bill PDFs to build payment history table ────────────
+    // Runs after page renders so the user sees results immediately.
+    // Updates the #pay-hist-body tbody as each bill loads.
+    loadPaymentHistoryInBackground(padBBL, billList, annualBills,
+      `https://a836-edms.nyc.gov/dctm-rest/repositories/dofedmspts/StatementSearch`);
+
+  } catch (err) {
+    // Show error with debug info in a scrollable pre block
+    const debugDump = debugLines.length ? `\n\nDebug log:\n${debugLines.join('\n')}` : '';
+    const el = document.getElementById('status');
+    el.className = 'status error';
+    el.innerHTML = `<strong>Error:</strong> ${err.message.split('\n')[0]}${debugDump ? `<details style="margin-top:0.5rem"><summary style="cursor:pointer;font-size:0.65rem">Debug log (click to expand)</summary><pre style="font-size:0.6rem;margin-top:0.5rem;white-space:pre-wrap;opacity:0.8">${debugDump}</pre></details>` : ''}`;
+  } finally {
+    document.getElementById('searchBtn').disabled = false;
+  }
+}
+
+function renderResults(data) {
+  const { address, borough, bbl, block, lot, boroughCode, geocodeLabel, plutoData, stmtList, billList, annualBills } = data;
+
+  // All data comes from PLUTO
+  const p = plutoData || {};
+
+  const marketValue  = p.fullval    || null;
+  const assessedValue= p.assesstot  || null;
+  const landValue    = p.assessland || null;
+  const buildingClass= p.bldgclass  || null;
+  const yearBuilt    = p.yearbuilt  || null;
+  const numFloors    = p.numfloors  || null;
+  const unitsRes     = p.unitsres   || null;
+  const unitsTot     = p.unitstot   || null;
+  const lotArea      = p.lotarea    || null;
+  const bldgArea     = p.bldgarea   || null;
+  const ownerName    = p.ownername  || null;
+  const taxClass     = p.taxclass   || null;
+  const zipCode      = p.zipcode    || null;
+  const yearAlter    = p.yearalter1 || null;
+  const noData = !plutoData && !stmtList?.length && !billList?.length && !annualBills?.length;
+
+  let html = '';
+
+  html += `<div class="result-header">
+    <div>
+      <div class="result-address">${address}, ${borough}${getTaxClassTag(taxClass)}</div>
+      <div class="result-meta">
+        ${zipCode ? `${borough}, NY ${zipCode} &nbsp;·&nbsp;` : ''}
+        ${buildingClass ? `Building Class ${buildingClass} &nbsp;·&nbsp;` : ''}
+        ${yearBuilt ? `Built ${yearBuilt}` : ''}
+        ${yearAlter ? `, Altered ${yearAlter}` : ''}
+      </div>
+    </div>
+    <div class="result-bbl">BBL: ${bbl.slice(0,1)}-${bbl.slice(1,6)}-${bbl.slice(6)}</div>
+  </div>`;
+
+  if (noData) {
+    html += `<div class="no-results">
+      <p>No structured data found in NYC Open Data for this property.</p>
+      <p style="margin-top:0.75rem">Try the direct DOF links below:</p>
+      <p style="margin-top:0.5rem">
+        <a href="https://a836-pts-access.nyc.gov/care/search/CommonSearch.aspx?mode=ADDRESS" target="_blank" style="color:var(--accent)">
+          NYC DOF Property Tax Portal →
+        </a>
+      </p>
+    </div>`;
+  } else {
+
+    // Key figures
+    html += `<div class="data-grid">`;
+
+    if (assessedValue) {
+      html += `<div class="data-card highlight">
+        <div class="data-card-label">Assessed Value</div>
+        <div class="data-card-value">${fmt(assessedValue)}</div>
+        <div class="data-card-sub">Used to calculate tax bill</div>
+      </div>`;
+    }
+
+    if (marketValue) {
+      html += `<div class="data-card">
+        <div class="data-card-label">DOF Market Value</div>
+        <div class="data-card-value">${fmt(marketValue)}</div>
+        <div class="data-card-sub">DOF estimate (not sale price)</div>
+      </div>`;
+    }
+
+    if (landValue) {
+      html += `<div class="data-card">
+        <div class="data-card-label">Land Assessment</div>
+        <div class="data-card-value">${fmt(landValue)}</div>
+        <div class="data-card-sub">Land portion only</div>
+      </div>`;
+    }
+
+    if (assessedValue && landValue) {
+      const bldgAssess = assessedValue - landValue;
+      html += `<div class="data-card">
+        <div class="data-card-label">Building Assessment</div>
+        <div class="data-card-value">${fmt(bldgAssess)}</div>
+        <div class="data-card-sub">Structure portion</div>
+      </div>`;
+    }
+
+    html += `</div>`;
+
+    // Property details table
+    const rows = [
+      ['Owner of Record', ownerName],
+      ['Tax Class', taxClass ? getTaxClassName(taxClass) : null],
+      ['Building Class', buildingClass],
+      ['Year Built', yearBuilt],
+      ['Year Last Altered', yearAlter],
+      ['Floors', numFloors],
+      ['Residential Units', unitsRes],
+      ['Total Units', unitsTot],
+      ['Lot Area (sq ft)', lotArea ? fmtNum(lotArea) : null],
+      ['Building Area (sq ft)', bldgArea ? fmtNum(bldgArea) : null],
+    ].filter(([,v]) => v);
+
+    if (rows.length > 0) {
+      html += `<div class="details-section">
+        <h3>Property Details</h3>
+        <table class="details-table">`;
+      for (const [label, value] of rows) {
+        html += `<tr><td>${label}</td><td>${value}</td></tr>`;
+      }
+      html += `</table></div>`;
+    }
+  }
+
+  const sectionId = () => `sec_${Math.random().toString(36).slice(2,7)}`;
+  const bblBorough = bbl.slice(0, 1);
+  const bblBlock   = parseInt(bbl.slice(1, 6)).toString();
+  const bblLot     = parseInt(bbl.slice(6, 10)).toString();
+  const bblBlockPad = bbl.slice(1, 6);
+  const bblLotPad   = bbl.slice(6, 10);
+
+  // ── Payment History — background loaded from QBL bill PDFs ──────────────
+  const payId = sectionId();
+  html += `<div class="details-section collapsible-section">
+    <button class="collapsible-toggle" onclick="toggleSection('${payId}', this)" aria-expanded="false">
+      <span>Payment History <span id="pay-hist-count" style="opacity:0.6;font-weight:400"></span></span>
+      <span class="collapsible-arrow">▼</span>
+    </button>
+    <div class="collapsible-body" id="${payId}">
+      <div style="overflow-x:auto">
+        <table class="payment-table">
+          <thead><tr>
+            <th>Bill Date</th><th>Fiscal Year</th>
+            <th style="text-align:right">Outstanding</th>
+            <th style="text-align:right">New Charges</th>
+            <th style="text-align:right">Amount Due</th>
+          </tr></thead>
+          <tbody id="pay-hist-body">
+            <tr><td colspan="5" style="text-align:center;padding:1.25rem;color:var(--muted);font-size:0.72rem">
+              <span class="spinner"></span> Loading payment history…
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="font-size:0.65rem;color:var(--muted);padding:0.45rem 1rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;flex-wrap:wrap;gap:0.3rem">
+        <span>Source: NYC DOF quarterly bills (QBL). Parsed from official bill PDFs.</span>
+        <a href="https://a836-pts-access.nyc.gov/care/search/commonsearch.aspx?mode=persprop" target="_blank" style="color:var(--accent)">DOF portal →</a>
+      </div>
+    </div>
+  </div>`;
+
+  // ── All Property Tax Bills ────────────────────────────────────────────────
+  const allBills = [
+    ...(Array.isArray(billList) ? billList : []),
+    ...(Array.isArray(annualBills) ? annualBills : [])
+  ].sort((a,b) => (b.docDate||b.stmtDate||0) - (a.docDate||a.stmtDate||0));
+
+  // Build full merged list: live EDMS results + static archive FY07–FY27
+  const staticBillDates = [];
+  for (let fy = 2027; fy >= 2007; fy--) {
+    const yr = fy - 1;
+    staticBillDates.push([`${yr}0715`, `Q1`, `FY${fy}`, 'QBL']);
+    staticBillDates.push([`${yr}1015`, `Q2`, `FY${fy}`, 'QBL']);
+    staticBillDates.push([`${fy}0115`, `Q3`, `FY${fy}`, 'QBL']);
+    staticBillDates.push([`${fy}0415`, `Q4`, `FY${fy}`, 'QBL']);
+  }
+  const seenBillDates = new Set(allBills.map(d => (d.docDate||d.stmtDate||'').toString().replace(/-/g,'').slice(0,8)));
+  const billRows = [];
+  for (const doc of allBills) {
+    const rawDate = (doc.docDate||doc.stmtDate||'').toString().replace(/-/g,'').slice(0,8);
+    const mo = parseInt(rawDate.slice(4,6)), yr = parseInt(rawDate.slice(0,4));
+    const fy = mo >= 7 ? `FY${yr+1}` : `FY${yr}`;
+    billRows.push({ dateStr: rawDate, label: doc.stmtType === 'SBL' ? 'Semi-Annual Bill' : 'Quarterly Bill', fy, url: doc.docURL || `https://a836-edms.nyc.gov/dctm-rest/repositories/dofedmspts/StatementSearch?bbl=${bbl}&stmtDate=${rawDate}&stmtType=${doc.stmtType||'QBL'}` });
+  }
+  for (const [d, label, fy, type] of staticBillDates) {
+    if (!seenBillDates.has(d)) {
+      billRows.push({ dateStr: d, label: `Quarterly Bill ${label}`, fy, url: `https://a836-edms.nyc.gov/dctm-rest/repositories/dofedmspts/StatementSearch?bbl=${bbl}&stmtDate=${d}&stmtType=${type}` });
+    }
+  }
+  billRows.sort((a,b) => b.dateStr.localeCompare(a.dateStr));
+
+  const billId = sectionId();
+  html += `<div class="details-section collapsible-section">
+    <button class="collapsible-toggle" onclick="toggleSection('${billId}', this)" aria-expanded="false">
+      <span>All Property Tax Bills <span style="opacity:0.6;font-weight:400">${allBills.length ? `(${allBills.length} confirmed + FY07–FY27 archive)` : '(FY07–FY27 archive)'}</span></span>
+      <span class="collapsible-arrow">▼</span>
+    </button>
+    <div class="collapsible-body" id="${billId}">`;
+
+  if (allBills.length === 0) {
+    html += `<div style="padding:0.5rem 1rem;font-size:0.68rem;color:var(--muted);border-bottom:1px solid var(--border)">Live bill index unavailable — showing static links for standard quarterly billing dates. PDFs open if the bill exists for this property.</div>`;
+  }
+  html += `<ul class="doc-list">`;
+  for (const row of billRows) {
+    const d = row.dateStr;
+    const dd = d.length === 8 ? `${d.slice(4,6)}/${d.slice(6,8)}/${d.slice(0,4)}` : d;
+    html += `<li class="doc-item"><span class="doc-date">${dd}</span><span class="doc-type">${row.label} <span class="doc-fy">${row.fy}</span></span><a class="bill-item-link" href="${row.url}" target="_blank">PDF →</a></li>`;
+  }
+  html += `</ul></div></div>`;
+
+  // ── All Notices of Property Value ─────────────────────────────────────────
+  const allNOPV = Array.isArray(stmtList) ? stmtList.sort((a,b) => (b.docDate||0) - (a.docDate||0)) : [];
+  const staticNOPVDates = [];
+  for (let fy = 2027; fy >= 2001; fy--) {
+    staticNOPVDates.push([`${fy-1}0115`, `NOPV ${fy-1}-${String(fy).slice(2)}`, `FY${fy}`]);
+  }
+  const seenNopvYears = new Set();
+  const nopvRows = [];
+  for (const doc of allNOPV) {
+    const rawDate = (doc.docDate||doc.stmtDate||'').toString().replace(/-/g,'').slice(0,8);
+    const yr = rawDate.slice(0,4);
+    if (yr && !seenNopvYears.has(yr)) {
+      seenNopvYears.add(yr);
+      nopvRows.push({ dateStr: rawDate, label: `NOPV ${yr}-${String(parseInt(yr)+1).slice(2)}`, fy: `FY${parseInt(yr)+1}`, url: doc.docURL || `https://a836-edms.nyc.gov/dctm-rest/repositories/dofedmspts/StatementSearch?bbl=${bbl}&stmtDate=${rawDate}&stmtType=NPV` });
+    }
+  }
+  for (const [d, label, fy] of staticNOPVDates) {
+    const yr = d.slice(0,4);
+    if (!seenNopvYears.has(yr)) {
+      seenNopvYears.add(yr);
+      nopvRows.push({ dateStr: d, label, fy, url: `https://a836-edms.nyc.gov/dctm-rest/repositories/dofedmspts/StatementSearch?bbl=${bbl}&stmtDate=${d}&stmtType=NPV` });
+    }
+  }
+  nopvRows.sort((a,b) => b.dateStr.localeCompare(a.dateStr));
+
+  const nopvId = sectionId();
+  html += `<div class="details-section collapsible-section">
+    <button class="collapsible-toggle" onclick="toggleSection('${nopvId}', this)" aria-expanded="false">
+      <span>All Notices of Property Value <span style="opacity:0.6;font-weight:400">${allNOPV.length ? `(${allNOPV.length} confirmed + FY01–FY27 archive)` : '(FY01–FY27 archive)'}</span></span>
+      <span class="collapsible-arrow">▼</span>
+    </button>
+    <div class="collapsible-body" id="${nopvId}">`;
+
+  if (allNOPV.length === 0) {
+    html += `<div style="padding:0.5rem 1rem;font-size:0.68rem;color:var(--muted);border-bottom:1px solid var(--border)">Live NOPV index unavailable — showing static links for Jan 15 of each year. PDFs open if the document exists for this property.</div>`;
+  }
+  html += `<ul class="doc-list">`;
+  for (const row of nopvRows) {
+    const d = row.dateStr;
+    const dd = d.length === 8 ? `${d.slice(4,6)}/${d.slice(6,8)}/${d.slice(0,4)}` : d;
+    html += `<li class="doc-item"><span class="doc-date">${dd}</span><span class="doc-type">${row.label} <span class="doc-fy">${row.fy}</span></span><a class="bill-item-link" href="${row.url}" target="_blank">PDF →</a></li>`;
+  }
+  html += `</ul>
+    <div style="font-size:0.65rem;color:var(--muted);padding:0.45rem 1rem;border-top:1px solid var(--border)">NOPVs are mailed each January. Links open the official PDF from the NYC DOF document system.</div>
+  </div></div>`;
+
+  // ── DOF Portal Link ────────────────────────────────────────────────────────
+  html += `<div class="details-section">
+    <h3>NYC Department of Finance Portal</h3>
+    <ul class="bills-list">
+      <li class="bill-item">
+        <div>
+          <div>DOF Property Tax Portal</div>
+          <div style="font-size:0.65rem;color:var(--muted);margin-top:0.15rem">Full assessment, exemptions, account history &amp; all bills — enter Borough ${bblBorough}, Block ${bblBlock}, Lot ${bblLot}</div>
+        </div>
+        <a class="bill-item-link" href="https://a836-pts-access.nyc.gov/care/search/commonsearch.aspx?mode=persprop" target="_blank">Open →</a>
+      </li>
+    </ul>
+    <div style="font-size:0.65rem;color:var(--muted);padding:0.45rem 1rem 0.6rem;border-top:1px solid var(--border)">
+      BBL <strong>${bbl}</strong> &nbsp;·&nbsp; Borough ${bblBorough} &nbsp;·&nbsp; Block ${bblBlock} &nbsp;·&nbsp; Lot ${bblLot}
+    </div>
+  </div>`;
+
+  html += `<div class="source-note">
+    Data sourced live from <a href="https://opendata.cityofnewyork.us" target="_blank">NYC Open Data</a> (PLUTO),
+    <a href="https://geosearch.planninglabs.nyc" target="_blank">NYC Planning GeoSearch</a>,
+    and <a href="https://a836-edms.nyc.gov" target="_blank">NYC DOF Document System</a>.
+  </div>`;
+
+  const resultsEl = document.getElementById('results');
+  resultsEl.innerHTML = html;
+  resultsEl.className = 'results visible';
+  resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function toggleSection(id, btn) {
+  const body = document.getElementById(id);
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  btn.classList.toggle('open', !isOpen);
+  btn.setAttribute('aria-expanded', String(!isOpen));
+}
+
+// Allow Enter key to search
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') lookupProperty();
+});
+</script>
+</body>
+</html>
